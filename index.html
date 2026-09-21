@@ -1,0 +1,1464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SVG Purifier</title>
+<style>
+  /* ── Reset & Base ── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface-2: #242837;
+    --border: #2e3348;
+    --border-focus: #6366f1;
+    --text: #e2e8f0;
+    --text-muted: #8892b0;
+    --accent: #6366f1;
+    --accent-hover: #818cf8;
+    --success: #22c55e;
+    --success-bg: rgba(34, 197, 94, 0.1);
+    --danger: #f43f5e;
+    --danger-bg: rgba(244, 63, 94, 0.08);
+    --added-bg: rgba(34, 197, 94, 0.08);
+    --removed-bg: rgba(244, 63, 94, 0.08);
+    --radius: 12px;
+    --radius-sm: 8px;
+    --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    line-height: 1.6;
+  }
+
+  /* ── Layout ── */
+  .app {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 4rem;
+  }
+
+  /* ── Header ── */
+  .header {
+    text-align: center;
+    margin-bottom: 2.5rem;
+  }
+
+  .header h1 {
+    font-size: 2.2rem;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    background: linear-gradient(135deg, #818cf8, #6366f1, #a78bfa);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 0.4rem;
+  }
+
+  .header p {
+    color: var(--text-muted);
+    font-size: 0.95rem;
+    max-width: 560px;
+    margin: 0 auto;
+  }
+
+  /* ── Drop Zone ── */
+  .drop-zone {
+    border: 2px dashed var(--border);
+    border-radius: var(--radius);
+    padding: 3rem 2rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    background: var(--surface);
+    position: relative;
+  }
+
+  .drop-zone:hover,
+  .drop-zone.drag-over {
+    border-color: var(--accent);
+    background: rgba(99, 102, 241, 0.04);
+  }
+
+  .drop-zone.drag-over {
+    transform: scale(1.005);
+  }
+
+  .drop-zone-icon {
+    width: 56px;
+    height: 56px;
+    margin: 0 auto 1rem;
+    background: rgba(99, 102, 241, 0.1);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .drop-zone-icon svg {
+    width: 28px;
+    height: 28px;
+    stroke: var(--accent);
+  }
+
+  .drop-zone h3 {
+    font-size: 1.05rem;
+    font-weight: 600;
+    margin-bottom: 0.3rem;
+  }
+
+  .drop-zone span {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+  }
+
+  .drop-zone span em {
+    color: var(--accent);
+    font-style: normal;
+    font-weight: 500;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  #file-input {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+  }
+
+  /* ── File Info Bar ── */
+  .file-info {
+    display: none;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    margin-top: 1rem;
+    background: var(--surface-2);
+    border-radius: var(--radius-sm);
+    font-size: 0.88rem;
+  }
+
+  .file-info.visible { display: flex; }
+
+  .file-info .file-icon {
+    width: 36px;
+    height: 36px;
+    background: rgba(99, 102, 241, 0.12);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .file-info .file-icon svg { width: 18px; height: 18px; stroke: var(--accent); }
+
+  .file-info .file-meta { flex: 1; min-width: 0; }
+  .file-info .file-name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .file-info .file-size { color: var(--text-muted); font-size: 0.8rem; font-weight: 500; }
+
+  .file-meta-row {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+    margin-top: 0.3rem;
+  }
+
+  .file-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.18rem 0.55rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 0.76rem;
+    line-height: 1.3;
+    user-select: none;
+  }
+
+  .file-tag svg {
+    width: 13px;
+    height: 13px;
+    stroke: var(--text-muted);
+    flex-shrink: 0;
+  }
+
+  .file-tag .tag-label {
+    color: var(--text-muted);
+  }
+
+  .file-tag-version .tag-val {
+    font-weight: 600;
+    color: #38bdf8;
+    font-family: var(--font-mono);
+  }
+
+  .file-tag-encoding .tag-val {
+    font-weight: 600;
+    color: #a78bfa;
+    font-family: var(--font-mono);
+  }
+
+  .file-info .btn-remove {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 6px;
+    transition: all 0.2s;
+  }
+  .file-info .btn-remove:hover { color: var(--danger); background: var(--danger-bg); }
+
+  /* ── Actions Row ── */
+  .actions {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-top: 1.5rem;
+    flex-wrap: wrap;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.7rem 1.6rem;
+    border: none;
+    border-radius: var(--radius-sm);
+    font-size: 0.92rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-family: inherit;
+  }
+
+  .btn svg { width: 18px; height: 18px; }
+
+  .btn-primary {
+    background: var(--accent);
+    color: #fff;
+  }
+  .btn-primary:hover:not(:disabled) { background: var(--accent-hover); transform: translateY(-1px); }
+  .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .btn-secondary {
+    background: var(--surface-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+  .btn-secondary:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+  .btn-secondary:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* ── Notification ── */
+  .notification {
+    display: none;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.65rem 1rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.88rem;
+    font-weight: 500;
+    margin-top: 1rem;
+    animation: slideIn 0.35s ease;
+  }
+
+  .notification.success {
+    display: flex;
+    background: var(--success-bg);
+    color: var(--success);
+    border: 1px solid rgba(34, 197, 94, 0.2);
+  }
+
+  .notification svg { width: 18px; height: 18px; flex-shrink: 0; }
+
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateY(-8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ── Stats Bar ── */
+  .stats {
+    display: none;
+    gap: 1rem;
+    margin-top: 1.25rem;
+    flex-wrap: wrap;
+  }
+
+  .stats.visible { display: flex; }
+
+  .stat-card {
+    flex: 1;
+    min-width: 140px;
+    padding: 0.85rem 1rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+  }
+
+  .stat-label {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 0.2rem;
+  }
+
+  .stat-value {
+    font-size: 1.3rem;
+    font-weight: 700;
+  }
+
+  .stat-value.text-danger { color: var(--danger); }
+  .stat-value.text-success { color: var(--success); }
+
+  /* ── Tabs ── */
+  .panel {
+    display: none;
+    margin-top: 2rem;
+  }
+
+  .panel.visible { display: block; }
+
+  .tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 0;
+  }
+
+  .tab-btn {
+    padding: 0.7rem 1.25rem;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 0.88rem;
+    font-weight: 500;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s;
+    font-family: inherit;
+  }
+
+  .tab-btn:hover { color: var(--text); }
+  .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  .tab-content {
+    display: none;
+  }
+
+  .tab-content.active { display: block; }
+
+  /* ── Code Block ── */
+  .code-wrapper {
+    position: relative;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+    overflow: hidden;
+  }
+
+  .code-block {
+    padding: 1.25rem;
+    overflow: auto;
+    max-height: 520px;
+    font-family: var(--font-mono);
+    font-size: 0.82rem;
+    line-height: 1.7;
+    white-space: pre;
+    tab-size: 2;
+    color: var(--text);
+    counter-reset: line;
+  }
+
+  .code-block .line {
+    display: block;
+    padding: 0 0 0 3.5rem;
+    position: relative;
+  }
+
+  .code-block .line::before {
+    counter-increment: line;
+    content: counter(line);
+    position: absolute;
+    left: 0;
+    width: 3rem;
+    text-align: right;
+    color: var(--text-muted);
+    opacity: 0.4;
+    font-size: 0.78rem;
+    user-select: none;
+  }
+
+  .code-block .line.removed {
+    background: var(--removed-bg);
+    text-decoration: line-through;
+    opacity: 0.65;
+  }
+
+  .code-block .line.added {
+    background: var(--added-bg);
+  }
+
+  .btn-copy {
+    position: absolute;
+    top: 0.6rem;
+    right: 0.6rem;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    padding: 0.35rem 0.7rem;
+    border-radius: 6px;
+    font-size: 0.78rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: inherit;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+
+  .btn-copy:hover { color: var(--text); border-color: var(--accent); }
+  .btn-copy svg { width: 14px; height: 14px; }
+
+  /* ── Preview ── */
+  .preview-container {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+    padding: 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 300px;
+  }
+
+  .preview-container svg {
+    max-width: 100%;
+    max-height: 480px;
+  }
+
+  /* ── Collapsible Comparison ── */
+  .collapsible-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-top: 1rem;
+  }
+
+  .collapsible-panel {
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    border: 1px solid var(--border);
+    transition: border-color 0.25s;
+  }
+
+  .collapsible-panel.before { border-color: rgba(244, 63, 94, 0.2); }
+  .collapsible-panel.after  { border-color: rgba(34, 197, 94, 0.2); }
+
+  .collapsible-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.7rem 1rem;
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.2s;
+    border: none;
+    width: 100%;
+    font-family: inherit;
+    text-align: left;
+  }
+
+  .collapsible-header:hover { filter: brightness(1.15); }
+
+  .collapsible-header h4 {
+    font-size: 0.82rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .collapsible-header .chevron {
+    width: 18px;
+    height: 18px;
+    transition: transform 0.3s ease;
+    flex-shrink: 0;
+  }
+
+  .collapsible-panel.open .collapsible-header .chevron {
+    transform: rotate(180deg);
+  }
+
+  .collapsible-panel.before .collapsible-header {
+    background: var(--danger-bg);
+    color: var(--danger);
+  }
+
+  .collapsible-panel.after .collapsible-header {
+    background: var(--added-bg);
+    color: var(--success);
+  }
+
+  .collapsible-body {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.35s ease;
+  }
+
+  .collapsible-panel.open .collapsible-body {
+    max-height: 2000px;
+  }
+
+  .collapsible-panel .code-wrapper {
+    border: none;
+    border-radius: 0;
+    border-top: 1px solid var(--border);
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 768px) {
+    .app { padding: 1.25rem 1rem 3rem; }
+    .header h1 { font-size: 1.6rem; }
+    .actions { flex-direction: column; align-items: stretch; }
+    .btn { justify-content: center; }
+    .stats { flex-direction: column; }
+  }
+
+  /* ── Scrollbar ── */
+  .code-block::-webkit-scrollbar { width: 6px; height: 6px; }
+  .code-block::-webkit-scrollbar-track { background: transparent; }
+  .code-block::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  .code-block::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <!-- Header -->
+  <header class="header">
+    <h1>&#x2728; SVG Purifier</h1>
+    <p>Remove metadata, protection attributes, and editor bloat from SVG files. Keep only pure shapes.</p>
+  </header>
+
+  <!-- Drop Zone -->
+  <div class="drop-zone" id="drop-zone">
+    <input type="file" id="file-input" accept=".svg">
+    <div class="drop-zone-icon">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5"/>
+      </svg>
+    </div>
+    <h3>Drop your SVG file here</h3>
+    <span>or <em>browse</em> to choose a file</span>
+  </div>
+
+  <!-- File Info -->
+  <div class="file-info" id="file-info">
+    <div class="file-icon">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z"/>
+      </svg>
+    </div>
+    <div class="file-meta">
+      <div class="file-name" id="file-name">—</div>
+      <div class="file-meta-row">
+        <span class="file-size" id="file-size">—</span>
+        <span class="file-tag file-tag-version" id="file-version" title="Detected SVG Version">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 0 1 0 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.6 6.6 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 0 1 0-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"/></svg>
+          <span class="tag-label">Version:</span>
+          <span class="tag-val" id="val-version">—</span>
+        </span>
+        <span class="file-tag file-tag-encoding" id="file-encoding" title="Detected Character Encoding">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M14.25 9.75 16.5 12l-2.25 2.25m-4.5 0L7.5 12l2.25-2.25M6 20.25h12A2.25 2.25 0 0 0 20.25 18V6A2.25 2.25 0 0 0 18 3.75H6A2.25 2.25 0 0 0 3.75 6v12A2.25 2.25 0 0 0 6 20.25Z"/></svg>
+          <span class="tag-label">Encoding:</span>
+          <span class="tag-val" id="val-encoding">—</span>
+        </span>
+      </div>
+    </div>
+    <button class="btn-remove" id="btn-remove" title="Remove file">
+      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"/>
+      </svg>
+    </button>
+  </div>
+
+  <!-- Actions -->
+  <div class="actions">
+    <button class="btn btn-primary" id="btn-purify" disabled>
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M9.75 3.104v5.714a2.25 2.25 0 0 1-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 0 1 4.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0 1 12 15a9.065 9.065 0 0 0-6.23.693L5 14.5m14.8.8 1.402 1.402c1.232 1.232.65 3.318-1.067 3.611A48.309 48.309 0 0 1 12 21c-2.773 0-5.491-.235-8.135-.687-1.718-.293-2.3-2.379-1.067-3.61L5 14.5"/>
+      </svg>
+      Purify
+    </button>
+    <button class="btn btn-secondary" id="btn-export" disabled>
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3"/>
+      </svg>
+      Export Purified SVG
+    </button>
+  </div>
+
+  <!-- Notification -->
+  <div class="notification" id="notification">
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/>
+    </svg>
+    <span>Your SVG file Purified now</span>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats" id="stats">
+    <div class="stat-card">
+      <div class="stat-label">Original Size</div>
+      <div class="stat-value" id="stat-original">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Purified Size</div>
+      <div class="stat-value text-success" id="stat-purified">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Removed</div>
+      <div class="stat-value text-danger" id="stat-removed">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Reduction</div>
+      <div class="stat-value text-danger" id="stat-percent">—</div>
+    </div>
+  </div>
+
+  <!-- Panel: Code Comparison & Preview -->
+  <div class="panel" id="panel">
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="tab-comparison">Before &amp; After</button>
+      <button class="tab-btn" data-tab="tab-before">Original Code</button>
+      <button class="tab-btn" data-tab="tab-after">Purified Code</button>
+      <button class="tab-btn" data-tab="tab-preview">Preview</button>
+    </div>
+
+    <!-- Comparison Tab -->
+    <div class="tab-content active" id="tab-comparison">
+      <div class="collapsible-stack">
+        <!-- Before Panel -->
+        <div class="collapsible-panel before open" id="panel-before">
+          <button class="collapsible-header" onclick="togglePanel('panel-before')">
+            <h4>&#x1F534; Before (Original)</h4>
+            <svg class="chevron" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5"/></svg>
+          </button>
+          <div class="collapsible-body">
+            <div class="code-wrapper">
+              <button class="btn-copy" data-target="code-before-cmp" title="Copy">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.666 3.888A2.25 2.25 0 0 0 13.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 0 1-.75.75H9.75a.75.75 0 0 1-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 0 1-2.25 2.25H6.75A2.25 2.25 0 0 1 4.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 0 1 1.927-.184"/></svg>
+                Copy
+              </button>
+              <div class="code-block" id="code-before-cmp"></div>
+            </div>
+          </div>
+        </div>
+        <!-- After Panel -->
+        <div class="collapsible-panel after open" id="panel-after">
+          <button class="collapsible-header" onclick="togglePanel('panel-after')">
+            <h4>&#x1F7E2; After (Purified)</h4>
+            <svg class="chevron" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5"/></svg>
+          </button>
+          <div class="collapsible-body">
+            <div class="code-wrapper">
+              <button class="btn-copy" data-target="code-after-cmp" title="Copy">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.666 3.888A2.25 2.25 0 0 0 13.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 0 1-.75.75H9.75a.75.75 0 0 1-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 0 1-2.25 2.25H6.75A2.25 2.25 0 0 1 4.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 0 1 1.927-.184"/></svg>
+                Copy
+              </button>
+              <div class="code-block" id="code-after-cmp"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Before Tab -->
+    <div class="tab-content" id="tab-before">
+      <div class="code-wrapper">
+        <button class="btn-copy" data-target="code-before" title="Copy">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.666 3.888A2.25 2.25 0 0 0 13.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 0 1-.75.75H9.75a.75.75 0 0 1-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 0 1-2.25 2.25H6.75A2.25 2.25 0 0 1 4.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 0 1 1.927-.184"/></svg>
+          Copy
+        </button>
+        <div class="code-block" id="code-before"></div>
+      </div>
+    </div>
+
+    <!-- After Tab -->
+    <div class="tab-content" id="tab-after">
+      <div class="code-wrapper">
+        <button class="btn-copy" data-target="code-after" title="Copy">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.666 3.888A2.25 2.25 0 0 0 13.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 0 1-.75.75H9.75a.75.75 0 0 1-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 0 1-2.25 2.25H6.75A2.25 2.25 0 0 1 4.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 0 1 1.927-.184"/></svg>
+          Copy
+        </button>
+        <div class="code-block" id="code-after"></div>
+      </div>
+    </div>
+
+    <!-- Preview Tab -->
+    <div class="tab-content" id="tab-preview">
+      <div class="preview-container" id="svg-preview">
+        <span style="color:var(--text-muted)">Preview will appear here</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Collapsible toggle (global scope for inline onclick) ──
+function togglePanel(id) {
+  document.getElementById(id).classList.toggle('open');
+}
+
+(function () {
+  'use strict';
+
+  // ── State ──
+  let originalSVG = '';
+  let purifiedSVG = '';
+  let fileName = '';
+  let detectedVersion = '';
+  let detectedEncoding = '';
+
+  // ── DOM Refs ──
+  const dropZone    = document.getElementById('drop-zone');
+  const fileInput   = document.getElementById('file-input');
+  const fileInfo    = document.getElementById('file-info');
+  const fileNameEl  = document.getElementById('file-name');
+  const fileSizeEl  = document.getElementById('file-size');
+  const valVersion  = document.getElementById('val-version');
+  const valEncoding = document.getElementById('val-encoding');
+  const btnRemove   = document.getElementById('btn-remove');
+  const btnPurify   = document.getElementById('btn-purify');
+  const btnExport   = document.getElementById('btn-export');
+  const notification = document.getElementById('notification');
+  const statsPanel  = document.getElementById('stats');
+  const panel       = document.getElementById('panel');
+
+  // ── File Handling ──
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+  });
+
+  fileInput.addEventListener('change', e => {
+    if (e.target.files.length) handleFile(e.target.files[0]);
+  });
+
+  btnRemove.addEventListener('click', e => {
+    e.stopPropagation();
+    resetAll();
+  });
+
+  // ── Detection: Encoding & SVG Version ──
+  function detectFileEncodingAndVersion(file, onComplete) {
+    const reader = new FileReader();
+    reader.onload = function (e) {
+      const buffer = e.target.result;
+      const bytes = new Uint8Array(buffer);
+
+      let byteEncoding = 'UTF-8';
+      let decoderName = 'utf-8';
+
+      // 1. Detect Byte Order Mark (BOM)
+      if (bytes.length >= 2 && bytes[0] === 0xFF && bytes[1] === 0xFE) {
+        byteEncoding = 'UTF-16LE';
+        decoderName = 'utf-16le';
+      } else if (bytes.length >= 2 && bytes[0] === 0xFE && bytes[1] === 0xFF) {
+        byteEncoding = 'UTF-16BE';
+        decoderName = 'utf-16be';
+      } else if (bytes.length >= 3 && bytes[0] === 0xEF && bytes[1] === 0xBB && bytes[2] === 0xBF) {
+        byteEncoding = 'UTF-8 (BOM)';
+        decoderName = 'utf-8';
+      } else if (bytes.length >= 4) {
+        // Heuristic: check for UTF-16 without BOM (ASCII characters interleaved with null bytes)
+        if (bytes[1] === 0x00 && bytes[3] === 0x00) {
+          byteEncoding = 'UTF-16LE';
+          decoderName = 'utf-16le';
+        } else if (bytes[0] === 0x00 && bytes[2] === 0x00) {
+          byteEncoding = 'UTF-16BE';
+          decoderName = 'utf-16be';
+        }
+      }
+
+      // Decode content into string
+      let text = '';
+      try {
+        text = new TextDecoder(decoderName).decode(buffer);
+      } catch (err) {
+        text = new TextDecoder('utf-8').decode(buffer);
+      }
+
+      // 2. Check XML Declaration for declared encoding (popular: UTF-8, UTF-16)
+      let finalEncoding = byteEncoding;
+      const encMatch = text.match(/<\?xml\s+[^>]*?encoding=(["'])(.*?)\1/i);
+      if (encMatch && encMatch[2]) {
+        const declared = encMatch[2].trim().toUpperCase();
+        if (declared.includes('UTF-16')) {
+          finalEncoding = byteEncoding.startsWith('UTF-16') ? byteEncoding : 'UTF-16';
+        } else if (declared.includes('UTF-8')) {
+          finalEncoding = byteEncoding === 'UTF-8 (BOM)' ? 'UTF-8 (BOM)' : 'UTF-8';
+        } else {
+          finalEncoding = declared;
+        }
+      } else if (byteEncoding === 'UTF-8') {
+        finalEncoding = 'UTF-8 (Default)';
+      }
+
+      // 3. Detect SVG Version (normally 1.0 or 1.1)
+      let detectedVer = '';
+      let versionDisplay = '';
+
+      // Check <svg ... version="...">
+      const verMatch = text.match(/<svg[^>]*\sversion=(["'])(.*?)\1/i);
+      if (verMatch && verMatch[2].trim()) {
+        detectedVer = verMatch[2].trim();
+        versionDisplay = 'v' + detectedVer;
+      } else {
+        // Check DOCTYPE declaration for SVG version
+        const docMatch = text.match(/<!DOCTYPE\s+svg[^>]*DTD\s+SVG\s+([\d.]+)/i);
+        if (docMatch && docMatch[1]) {
+          detectedVer = docMatch[1].trim();
+          versionDisplay = 'v' + detectedVer;
+        } else {
+          // Standard SVG default is version 1.1
+          detectedVer = '1.1';
+          versionDisplay = 'v1.1 (Default)';
+        }
+      }
+
+      onComplete({
+        text,
+        encoding: finalEncoding,
+        version: detectedVer,
+        versionDisplay
+      });
+    };
+
+    reader.readAsArrayBuffer(file);
+  }
+
+  function handleFile(file) {
+    if (!file.name.toLowerCase().endsWith('.svg')) {
+      alert('Please select an SVG file.');
+      return;
+    }
+    fileName = file.name;
+
+    detectFileEncodingAndVersion(file, res => {
+      originalSVG = res.text;
+      detectedEncoding = res.encoding;
+      detectedVersion = res.version;
+      purifiedSVG = '';
+
+      fileNameEl.textContent = fileName;
+      fileSizeEl.textContent = formatBytes(file.size);
+      valVersion.textContent = res.versionDisplay;
+      valEncoding.textContent = res.encoding;
+
+      fileInfo.classList.add('visible');
+      btnPurify.disabled = false;
+      btnExport.disabled = true;
+      notification.classList.remove('success');
+      notification.style.display = 'none';
+      statsPanel.classList.remove('visible');
+      panel.classList.remove('visible');
+    });
+  }
+
+  function resetAll() {
+    originalSVG = '';
+    purifiedSVG = '';
+    fileName = '';
+    detectedVersion = '';
+    detectedEncoding = '';
+    fileInput.value = '';
+    valVersion.textContent = '—';
+    valEncoding.textContent = '—';
+    fileInfo.classList.remove('visible');
+    btnPurify.disabled = true;
+    btnExport.disabled = true;
+    notification.classList.remove('success');
+    notification.style.display = 'none';
+    statsPanel.classList.remove('visible');
+    panel.classList.remove('visible');
+  }
+
+  // ── Purify ──
+  btnPurify.addEventListener('click', () => {
+    if (!originalSVG) return;
+    purifiedSVG = purifySVG(originalSVG);
+    showResults();
+  });
+
+  function purifySVG(raw) {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(raw, 'image/svg+xml');
+    const svg = doc.documentElement;
+
+    // ── 0. Extract XML Declaration & SVG Version ──
+    let xmlDecl = '<?xml version="1.0" encoding="UTF-8"?>';
+    const xmlDeclMatch = raw.match(/<\?xml\s+[^?]*\?>/i);
+    if (xmlDeclMatch) {
+      xmlDecl = xmlDeclMatch[0];
+      if (!xmlDecl.toLowerCase().includes('encoding')) {
+        xmlDecl = xmlDecl.replace(/\?>$/, ' encoding="UTF-8"?>');
+      }
+    }
+
+    // Preserve SVG version (retain original, detected, or fallback to '1.1')
+    let svgVersion = svg.getAttribute('version');
+    if (!svgVersion) {
+      const rawVersionMatch = raw.match(/<svg[^>]*\sversion=(["'])(.*?)\1/i);
+      svgVersion = rawVersionMatch ? rawVersionMatch[2] : (detectedVersion || '1.1');
+    }
+
+    // ── 1. Namespace prefixes to strip (editor / tool specific) ──
+    const junkNS = [
+      'http://sodipodi.sourceforge.net',
+      'http://www.inkscape.org',
+      'http://ns.adobe.com',
+      'http://www.bohemiancoding.com',
+      'http://creativecommons.org',
+      'http://purl.org',
+      'http://web.resource.org',
+      'http://www.w3.org/1999/02/22-rdf-syntax-ns',
+      'http://schemas.microsoft.com',
+      'http://www.serif.com',
+      'http://www.figma.com',
+      'http://www.corel.com',
+      'http://product.corel.com',
+      'http://www.w3.org/2000/01/rdf-schema',
+      'http://www.w3.org/XML/1998/namespace',
+    ];
+
+    // Prefixes that belong to editors
+    const junkPrefixes = [
+      'sodipodi', 'inkscape', 'cc', 'dc', 'rdf', 'ns0', 'ns1', 'ns2',
+      'sketch', 'serif', 'figma', 'corel', 'ai', 'cdr', 'i', 'x',
+      'graph', 'pgf',
+    ];
+
+    // ── 2. Elements to remove entirely ──
+    const removeElements = [
+      'metadata',
+      'sodipodi:namedview',
+      'sodipodi:guide',
+      'inkscape:grid',
+      'inkscape:perspective',
+      'foreignObject',
+      'i:pgf',
+      'pgf',
+      'switch',            // Illustrator compat switch blocks
+      'desc',              // Editor descriptions
+      'title',             // Auto-generated titles
+    ];
+
+    // Remove comments
+    const walker = doc.createTreeWalker(doc, NodeFilter.SHOW_COMMENT, null, false);
+    const comments = [];
+    while (walker.nextNode()) comments.push(walker.currentNode);
+    comments.forEach(c => c.parentNode && c.parentNode.removeChild(c));
+
+    // Remove processing instructions
+    const pis = [];
+    for (let n = doc.firstChild; n; n = n.nextSibling) {
+      if (n.nodeType === Node.PROCESSING_INSTRUCTION_NODE) pis.push(n);
+    }
+    pis.forEach(pi => pi.parentNode && pi.parentNode.removeChild(pi));
+
+    // Remove junk elements
+    removeElements.forEach(tag => {
+      const parts = tag.split(':');
+      let els;
+      if (parts.length === 2) {
+        els = svg.querySelectorAll(parts.join('\\:'));
+        if (!els.length) {
+          els = svg.getElementsByTagName(tag);
+        }
+      } else {
+        els = svg.getElementsByTagName(tag);
+      }
+      Array.from(els).forEach(el => el.parentNode && el.parentNode.removeChild(el));
+    });
+
+    // Also remove any element whose tagName includes a junk prefix
+    function removeJunkElements(node) {
+      const children = Array.from(node.childNodes);
+      children.forEach(child => {
+        if (child.nodeType === Node.ELEMENT_NODE) {
+          const localTag = (child.localName || child.tagName || '').toLowerCase();
+          const prefix = (child.prefix || '').toLowerCase();
+          const fullTag = child.tagName.toLowerCase();
+
+          if (junkPrefixes.includes(prefix) ||
+              removeElements.includes(localTag) ||
+              removeElements.includes(fullTag)) {
+            child.parentNode && child.parentNode.removeChild(child);
+          } else {
+            removeJunkElements(child);
+          }
+        }
+      });
+    }
+    removeJunkElements(svg);
+
+    // ── 3. Attributes to remove (including locks & protection) ──
+    const removeAttrs = [
+      'xml:space',
+      'enable-background',
+      'data-name',
+      'contentScriptType',
+      'contentStyleType',
+      'preserveAspectRatio',
+      'locked',
+      'lock',
+      'protected',
+      'data-lock',
+      'data-locked',
+      'data-protection',
+      'tabindex',
+      'aria-hidden',
+    ];
+
+    // Attribute prefixes to strip
+    const removeAttrPrefixes = [
+      'inkscape:',
+      'sodipodi:',
+      'serif:',
+      'sketch:',
+      'figma:',
+      'corel:',
+      'data-',  // editor data attributes
+      'xmlns:',  // handled separately below
+      'ai:',
+      'i:',
+    ];
+
+    function cleanAttributes(el) {
+      const attrsToRemove = [];
+      for (let i = 0; i < el.attributes.length; i++) {
+        const attr = el.attributes[i];
+        const name = attr.name.toLowerCase();
+
+        // Remove exact match attrs
+        if (removeAttrs.includes(name)) {
+          attrsToRemove.push(attr.name);
+          continue;
+        }
+
+        // Lock and protection attributes
+        if (name.includes('lock') || name.includes('protect') || name.includes('insensitive')) {
+          attrsToRemove.push(attr.name);
+          continue;
+        }
+
+        // Pointer-events lock
+        if (name === 'pointer-events') {
+          attrsToRemove.push(attr.name);
+          continue;
+        }
+
+        // Style attribute: clean pointer-events: none / user-select: none
+        if (name === 'style') {
+          let styleVal = attr.value;
+          styleVal = styleVal
+            .replace(/pointer-events\s*:\s*none\s*;?/gi, '')
+            .replace(/user-select\s*:\s*none\s*;?/gi, '')
+            .trim();
+          if (!styleVal) {
+            attrsToRemove.push(attr.name);
+          } else if (styleVal !== attr.value) {
+            el.setAttribute('style', styleVal);
+          }
+        }
+
+        // Remove prefixed attrs
+        if (removeAttrPrefixes.some(p => name.startsWith(p))) {
+          // Keep xmlns and xmlns:xlink (essential for SVG)
+          if (name === 'xmlns' || name === 'xmlns:xlink' || name === 'xmlns:svg') continue;
+          attrsToRemove.push(attr.name);
+          continue;
+        }
+
+        // Remove namespace attrs pointing to junk
+        if (name.startsWith('xmlns:')) {
+          const nsVal = attr.value;
+          if (junkNS.some(ns => nsVal.startsWith(ns))) {
+            attrsToRemove.push(attr.name);
+          }
+        }
+      }
+      attrsToRemove.forEach(a => el.removeAttribute(a));
+    }
+
+    function walkAndClean(node) {
+      if (node.nodeType === Node.ELEMENT_NODE) {
+        cleanAttributes(node);
+        Array.from(node.childNodes).forEach(walkAndClean);
+      }
+    }
+    walkAndClean(svg);
+
+    // ── 4. Clean <svg> root attributes ──
+    // Remove non-essential root attrs (baseProfile, x, y on root, etc.)
+    const rootRemove = ['baseProfile', 'x', 'y', 'xml:space', 'enable-background',
+                        'contentScriptType', 'contentStyleType'];
+    rootRemove.forEach(a => svg.removeAttribute(a));
+
+    // Preserve / set version attribute
+    svg.setAttribute('version', svgVersion);
+
+    // Ensure xmlns is present
+    if (!svg.getAttribute('xmlns')) {
+      svg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    }
+
+    // ── 5. Simplify wrapper groups: hoist child groups to parent ──
+    function isInsideProtectedContainer(node) {
+      let curr = node.parentNode;
+      while (curr && curr.nodeType === Node.ELEMENT_NODE) {
+        const tag = (curr.localName || curr.tagName || '').toLowerCase();
+        if (['defs', 'clippath', 'mask', 'pattern', 'symbol', 'marker'].includes(tag)) {
+          return true;
+        }
+        curr = curr.parentNode;
+      }
+      return false;
+    }
+
+    function propagateGroupAttributes(childGroup, targetElem) {
+      const transform = childGroup.getAttribute('transform');
+      const opacity = childGroup.getAttribute('opacity');
+      const fill = childGroup.getAttribute('fill');
+      const stroke = childGroup.getAttribute('stroke');
+      const strokeWidth = childGroup.getAttribute('stroke-width');
+      const strokeLinecap = childGroup.getAttribute('stroke-linecap');
+      const strokeLinejoin = childGroup.getAttribute('stroke-linejoin');
+      const clipPath = childGroup.getAttribute('clip-path');
+      const mask = childGroup.getAttribute('mask');
+      const filter = childGroup.getAttribute('filter');
+      const style = childGroup.getAttribute('style');
+
+      if (transform) {
+        const existing = targetElem.getAttribute('transform');
+        targetElem.setAttribute('transform', existing ? `${transform} ${existing}` : transform);
+      }
+      if (opacity) {
+        const existing = targetElem.getAttribute('opacity');
+        if (existing) {
+          const combined = (parseFloat(opacity) * parseFloat(existing)).toFixed(4);
+          targetElem.setAttribute('opacity', String(parseFloat(combined)));
+        } else {
+          targetElem.setAttribute('opacity', opacity);
+        }
+      }
+      if (fill && !targetElem.hasAttribute('fill')) targetElem.setAttribute('fill', fill);
+      if (stroke && !targetElem.hasAttribute('stroke')) targetElem.setAttribute('stroke', stroke);
+      if (strokeWidth && !targetElem.hasAttribute('stroke-width')) targetElem.setAttribute('stroke-width', strokeWidth);
+      if (strokeLinecap && !targetElem.hasAttribute('stroke-linecap')) targetElem.setAttribute('stroke-linecap', strokeLinecap);
+      if (strokeLinejoin && !targetElem.hasAttribute('stroke-linejoin')) targetElem.setAttribute('stroke-linejoin', strokeLinejoin);
+      if (clipPath && !targetElem.hasAttribute('clip-path')) targetElem.setAttribute('clip-path', clipPath);
+      if (mask && !targetElem.hasAttribute('mask')) targetElem.setAttribute('mask', mask);
+      if (filter && !targetElem.hasAttribute('filter')) targetElem.setAttribute('filter', filter);
+      if (style) {
+        const existing = targetElem.getAttribute('style');
+        targetElem.setAttribute('style', existing ? `${style.replace(/;?$/, ';')} ${existing}` : style);
+      }
+    }
+
+    function hoistChildWrapperGroups(rootSvg) {
+      let changed = true;
+      let guard = 0;
+      while (changed && guard < 50) {
+        changed = false;
+        guard++;
+
+        // Find child <g> elements whose parent is also a <g>
+        const childGroups = rootSvg.querySelectorAll('g > g');
+        for (const childGroup of Array.from(childGroups)) {
+          if (isInsideProtectedContainer(childGroup)) continue;
+
+          const parentGroup = childGroup.parentNode;
+          if (!parentGroup || parentGroup.nodeName.toLowerCase() !== 'g') continue;
+
+          // Hoist all children of childGroup into parentGroup before childGroup
+          const childNodes = Array.from(childGroup.childNodes);
+          for (const childNode of childNodes) {
+            if (childNode.nodeType === Node.ELEMENT_NODE) {
+              propagateGroupAttributes(childGroup, childNode);
+            }
+            parentGroup.insertBefore(childNode, childGroup);
+          }
+          parentGroup.removeChild(childGroup);
+          changed = true;
+        }
+      }
+    }
+
+    hoistChildWrapperGroups(svg);
+
+    // ── 6. Remove empty <defs>, empty <g>, etc. ──
+    function removeEmptyContainers(node) {
+      const children = Array.from(node.childNodes);
+      children.forEach(child => {
+        if (child.nodeType === Node.ELEMENT_NODE) {
+          removeEmptyContainers(child);
+          const tag = (child.localName || '').toLowerCase();
+          if ((tag === 'defs' || tag === 'g') && child.childNodes.length === 0) {
+            child.parentNode && child.parentNode.removeChild(child);
+          }
+        }
+      });
+    }
+    removeEmptyContainers(svg);
+
+    // ── 7. Serialize ──
+    const serializer = new XMLSerializer();
+    let output = serializer.serializeToString(svg);
+
+    // Clean up residual namespace declarations that XMLSerializer might re-add
+    output = output.replace(/\s*xmlns:(sodipodi|inkscape|cc|dc|rdf|ns\d+|sketch|serif|figma|corel|ai|cdr|i|pgf|x|graph)="[^"]*"/gi, '');
+
+    // Remove xmlns:xml
+    output = output.replace(/\s*xmlns:xml="[^"]*"/gi, '');
+
+    // Remove empty xmlns=""
+    output = output.replace(/\s*xmlns=""/g, '');
+
+    // Clean double spaces in tags
+    output = output.replace(/(<[^>]*?)\s{2,}/g, '$1 ');
+
+    // Prettify: basic indentation
+    output = prettifyXML(output);
+
+    // Prepend XML declaration with UTF-8 encoding
+    output = xmlDecl + '\n' + output;
+
+    return output;
+  }
+
+  function prettifyXML(xml) {
+    // Simple XML pretty-printer
+    let formatted = '';
+    let indent = 0;
+    const tab = '  ';
+
+    // Split by tags
+    const parts = xml.replace(/>\s*</g, '><').split(/(<[^>]+>)/g).filter(Boolean);
+
+    parts.forEach(part => {
+      if (!part.trim()) return;
+
+      if (part.match(/^<\/\w/)) {
+        // Closing tag
+        indent = Math.max(0, indent - 1);
+        formatted += tab.repeat(indent) + part.trim() + '\n';
+      } else if (part.match(/^<\w[^>]*[^/]>$/)) {
+        // Opening tag (not self-closing)
+        formatted += tab.repeat(indent) + part.trim() + '\n';
+        indent++;
+      } else if (part.match(/^<\w[^>]*\/>$/)) {
+        // Self-closing tag
+        formatted += tab.repeat(indent) + part.trim() + '\n';
+      } else {
+        // Text content or other
+        formatted += tab.repeat(indent) + part.trim() + '\n';
+      }
+    });
+
+    return formatted.trim();
+  }
+
+  // ── Results Display ──
+  function showResults() {
+    // Stats
+    const origSize = new Blob([originalSVG]).size;
+    const purSize  = new Blob([purifiedSVG]).size;
+    const removed  = origSize - purSize;
+    const percent  = ((removed / origSize) * 100).toFixed(1);
+
+    document.getElementById('stat-original').textContent = formatBytes(origSize);
+    document.getElementById('stat-purified').textContent = formatBytes(purSize);
+    document.getElementById('stat-removed').textContent  = '−' + formatBytes(removed);
+    document.getElementById('stat-percent').textContent   = '−' + percent + '%';
+
+    statsPanel.classList.add('visible');
+
+    // Notification
+    notification.classList.add('success');
+    notification.style.display = 'flex';
+
+    // Enable export
+    btnExport.disabled = false;
+
+    // Prettify original for fair comparison
+    const prettyOriginal = prettifyXML(originalSVG);
+
+    // Compute diff and render Before/After comparison panels
+    const origLines = prettyOriginal.split('\n');
+    const purLines  = purifiedSVG.split('\n');
+    const diff = computeDiff(origLines, purLines);
+
+    renderDiffBefore('code-before-cmp', diff);
+    renderDiffAfter('code-after-cmp', diff);
+
+    // Full code views (no diff highlights)
+    renderCode('code-before', prettyOriginal);
+    renderCode('code-after', purifiedSVG);
+
+    // Preview (strip xml declaration so browser DOM doesn't get confused)
+    const previewEl = document.getElementById('svg-preview');
+    previewEl.innerHTML = purifiedSVG.replace(/^<\?xml[^>]*\?>\s*/i, '');
+
+    // Show panel
+    panel.classList.add('visible');
+
+    // Scroll to results
+    notification.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  // ── Simple LCS-based diff ──
+  function computeDiff(oldLines, newLines) {
+    const m = oldLines.length;
+    const n = newLines.length;
+
+    // Build LCS table
+    const dp = Array.from({ length: m + 1 }, () => new Uint16Array(n + 1));
+    for (let i = 1; i <= m; i++) {
+      for (let j = 1; j <= n; j++) {
+        if (oldLines[i - 1].trim() === newLines[j - 1].trim()) {
+          dp[i][j] = dp[i - 1][j - 1] + 1;
+        } else {
+          dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
+        }
+      }
+    }
+
+    // Backtrack to produce diff entries
+    const result = [];
+    let i = m, j = n;
+    while (i > 0 || j > 0) {
+      if (i > 0 && j > 0 && oldLines[i - 1].trim() === newLines[j - 1].trim()) {
+        result.push({ type: 'keep', oldLine: oldLines[i - 1], newLine: newLines[j - 1] });
+        i--; j--;
+      } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
+        result.push({ type: 'added', newLine: newLines[j - 1] });
+        j--;
+      } else {
+        result.push({ type: 'removed', oldLine: oldLines[i - 1] });
+        i--;
+      }
+    }
+    result.reverse();
+    return result;
+  }
+
+  // Render the Before panel: show kept + removed lines, removed lines get strikethrough
+  function renderDiffBefore(id, diff) {
+    const el = document.getElementById(id);
+    el.innerHTML = diff
+      .filter(d => d.type === 'keep' || d.type === 'removed')
+      .map(d => {
+        const text = escapeHTML(d.oldLine) || ' ';
+        const cls = d.type === 'removed' ? ' removed' : '';
+        return `<span class="line${cls}">${text}</span>`;
+      })
+      .join('');
+  }
+
+  // Render the After panel: show kept + added lines, added lines get highlight
+  function renderDiffAfter(id, diff) {
+    const el = document.getElementById(id);
+    el.innerHTML = diff
+      .filter(d => d.type === 'keep' || d.type === 'added')
+      .map(d => {
+        const text = escapeHTML(d.type === 'added' ? d.newLine : d.newLine) || ' ';
+        const cls = d.type === 'added' ? ' added' : '';
+        return `<span class="line${cls}">${text}</span>`;
+      })
+      .join('');
+  }
+
+  function renderCode(id, code, lineClass) {
+    const el = document.getElementById(id);
+    const lines = escapeHTML(code).split('\n');
+    el.innerHTML = lines.map(line => {
+      const cls = lineClass ? ` ${lineClass}` : '';
+      return `<span class="line${cls}">${line || ' '}</span>`;
+    }).join('');
+  }
+
+  function escapeHTML(str) {
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  // ── Tabs ──
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById(btn.dataset.tab).classList.add('active');
+    });
+  });
+
+  // ── Copy ──
+  document.querySelectorAll('.btn-copy').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const targetId = btn.dataset.target;
+      const text = document.getElementById(targetId).textContent;
+      navigator.clipboard.writeText(text).then(() => {
+        const orig = btn.innerHTML;
+        btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width:14px;height:14px"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5"/></svg> Copied!';
+        setTimeout(() => { btn.innerHTML = orig; }, 1500);
+      });
+    });
+  });
+
+  // ── Export ──
+  btnExport.addEventListener('click', () => {
+    if (!purifiedSVG) return;
+    const blob = new Blob([purifiedSVG], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName.replace(/\.svg$/i, '') + '_purified.svg';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  });
+
+  // ── Util ──
+  function formatBytes(bytes) {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+  }
+})();
+</script>
+
+</body>
+</html>

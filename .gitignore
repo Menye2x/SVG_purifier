@@ -1,0 +1,25 @@
+# Sistem / OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Editor IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Hasil unduhan test otomatis dari aplikasi (opsional)
+*_purified.svg
+
+# Node / NPM (Jika di masa depan dikonversi menggunakan Node.js/bundler)
+node_modules/
+npm-debug.log
+yarn-error.log
+package-lock.json
+yarn.lock
