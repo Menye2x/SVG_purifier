@@ -1146,6 +1146,19 @@ function togglePanel(id) {
       return false;
     }
 
+    // Keep groups that define clipping or masking intact. Flattening these
+    // groups can move clip-path/mask onto every child path, which may change
+    // how applications such as CorelDRAW interpret the SVG on import.
+    function groupHasClipOrMask(group) {
+      if (group.hasAttribute('clip-path') || group.hasAttribute('mask')) {
+        return true;
+      }
+
+      // SVG also permits these properties inside a style attribute.
+      const style = group.getAttribute('style') || '';
+      return /(?:^|;)\s*(?:clip-path|mask)\s*:/i.test(style);
+    }
+
     function propagateGroupAttributes(childGroup, targetElem) {
       const transform = childGroup.getAttribute('transform');
       const opacity = childGroup.getAttribute('opacity');
@@ -1197,6 +1210,9 @@ function togglePanel(id) {
         const childGroups = rootSvg.querySelectorAll('g > g');
         for (const childGroup of Array.from(childGroups)) {
           if (isInsideProtectedContainer(childGroup)) continue;
+
+          // Do not unwrap a group that carries clipping or masking.
+          if (groupHasClipOrMask(childGroup)) continue;
 
           const parentGroup = childGroup.parentNode;
           if (!parentGroup || parentGroup.nodeName.toLowerCase() !== 'g') continue;
